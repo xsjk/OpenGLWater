@@ -16,3 +16,6 @@ I did not implement much of the GUIs and all the parameters were hard-coded for 
 (But I think we still can modify the parameters in the shaders since the shaders will be re-compiled every time before the program starts)
 
 Expecting some bugs, e.g., the waves sometimes won't fade and the whole surface might blow up eventually.
+
+![image](https://github.com/JCSaltFish/OpenGLWater/blob/master/Screenshot%202.png)
+![image](https://github.com/JCSaltFish/OpenGLWater/blob/master/Screenshot%201.png)
