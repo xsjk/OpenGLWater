@@ -1,6 +1,6 @@
 ## SIMPLE FREEGLUT WATER SIMULATION
 
-This is a simple water simulation program for assignment #3 of CS535.
+This is a simple water simulation program.
 
 Inspired by WebGL Water by Evan Wallace: http://madebyevan.com/webgl-water/.
 
