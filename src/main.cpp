@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cassert>
+#include <memory>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/type_precision.hpp>
@@ -12,8 +13,6 @@
 
 #include "PerlinNoise.hpp"
 
-using namespace std;
-
 // Vertex format
 struct vert {
 	glm::vec3 pos;		// 3D Position
@@ -25,14 +24,14 @@ struct vert {
 GLint width, height;				// Window size
 int texWidth, texHeight;			// Texture size (Both water and terrrain buffer textures)
 
-vector<glm::u8vec3> initTexData;		// Texture data
-vector<glm::u8vec3> islandsTexData;		// Terrain height buffer texture
+std::vector<glm::u8vec3> initTexData;		// Texture data
+std::vector<glm::u8vec3> islandsTexData;		// Terrain height buffer texture
 unsigned char* wallTexData;
 unsigned char* terrTexData;				// Terrain shading texture
-vector<glm::u8vec3> refractionTexData;
-vector<glm::u8vec3> reflectionTexData;
-vector<glm::u8vec4> envMapData;
-vector<glm::u8vec4> causticsMapData;
+std::vector<glm::u8vec3> refractionTexData;
+std::vector<glm::u8vec3> reflectionTexData;
+std::vector<glm::u8vec4> envMapData;
+std::vector<glm::u8vec4> causticsMapData;
 
 GLuint prevTexture;		// Texture objects
 GLuint currTexture;
@@ -64,8 +63,8 @@ GLuint uniLightDirDisp;
 
 glm::vec2 mousePos;
 
-mt19937 rng;
-uniform_int_distribution<> noise;
+std::mt19937 rng;
+std::uniform_int_distribution<> noise;
 siv::PerlinNoise perlin;			// For random terrain generation
 
 GLuint vao;				// Vertex array object
@@ -82,39 +81,39 @@ GLuint waterSurfVbuf;
 GLuint waterSurfIbuf;
 GLsizei waterVcount;
 GLsizei waterSurfVcount;
-vector<vert> waterVerts;
-vector<vert> waterSurfVerts;
-vector<GLuint> waterIds;
-vector<GLuint> waterSurfIds;
+std::vector<vert> waterVerts;
+std::vector<vert> waterSurfVerts;
+std::vector<GLuint> waterIds;
+std::vector<GLuint> waterSurfIds;
 
 GLuint wallVao;
 GLuint wallVbuf;
 GLuint wallIbuf;
 GLsizei wallVcount;
-vector<vert> wallVerts;
-vector<GLuint> wallIds;
+std::vector<vert> wallVerts;
+std::vector<GLuint> wallIds;
 
 GLuint skyVao;
 GLuint skyVbuf;
 GLuint skyIbuf;
 GLsizei skyVcount;
-vector<vert> skyVerts;
-vector<GLuint> skyIds;
+std::vector<vert> skyVerts;
+std::vector<GLuint> skyIds;
 
 GLuint terrVtsX, terrVtsY;
 GLuint terrVao;
 GLuint terrVbuf;
 GLuint terrIbuf;
 GLsizei terrVcount;
-vector<vert> terrVerts;
-vector<GLuint> terrIds;
+std::vector<vert> terrVerts;
+std::vector<GLuint> terrIds;
 
 bool enableTerrain;
 
 // CAUSTICS VARIABLES
 glm::vec3 lightPos;
 
-Mesh* mesh;				// Mesh loaded from .obj file
+std::unique_ptr<Mesh> mesh;				// Mesh loaded from .obj file
 
 // Camera state
 glm::vec3 camCoords;		// Spherical coordinates (theta, phi, radius) of the camera
@@ -159,7 +158,7 @@ void cleanup();
 
 // Other functions
 void generateIslands();
-GLuint loadSkybox(vector<std::string> faces);
+GLuint loadSkybox(std::vector<std::string> faces);
 
 int main(int argc, char** argv) {
 	try {
@@ -170,9 +169,9 @@ int main(int argc, char** argv) {
 		initGeometry();
 		initTextures();
 
-	} catch (const exception& e) {
+	} catch (const std::exception& e) {
 		// Handle any errors
-		cerr << "Fatal error: " << e.what() << endl;
+		std::cerr << "Fatal error: " << e.what() << std::endl;
 		cleanup();
 		return -1;
 	}
@@ -225,12 +224,12 @@ void initState() {
 
 	mousePos = glm::vec2(-2.0f, -2.0f);
 
-	random_device rd;
-	rng = mt19937(rd());
-	noise = uniform_int_distribution<>(0, 256);
+	std::random_device rd;
+	rng = std::mt19937(rd());
+	noise = std::uniform_int_distribution<>(0, 256);
 
-	waterVtsX = 128;
-	waterVtsY = 128;
+	waterVtsX = 512;
+	waterVtsY = 512;
 	waterVao = 0;
 	waterVbuf = 0;
 	waterIbuf = 0;
@@ -314,7 +313,7 @@ void initOpenGL() {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// Compile and link display shader
-	vector<GLuint> shaders;
+	std::vector<GLuint> shaders;
 	shaders.push_back(compileShader(GL_VERTEX_SHADER, "glsl/sh_v_disp.glsl"));
 	shaders.push_back(compileShader(GL_GEOMETRY_SHADER, "glsl/sh_g_disp.glsl"));
 	shaders.push_back(compileShader(GL_FRAGMENT_SHADER, "glsl/sh_f_disp.glsl"));
@@ -423,14 +422,14 @@ void initGeometry() {
 		glm::vec2 tc;
 	};
 	// Create a surface (quad) to draw the texture onto
-	vector<vert> verts = {
-		{ glm::vec2(-1.0f, -1.0f), glm::vec2(0.0f, 0.0f) },
-		{ glm::vec2( 1.0f, -1.0f), glm::vec2(1.0f, 0.0f) },
-		{ glm::vec2( 1.0f,  1.0f), glm::vec2(1.0f, 1.0f) },
-		{ glm::vec2(-1.0f,  1.0f), glm::vec2(0.0f, 1.0f) },
+	std::vector<vert> verts = {
+		{ {-1.0f, -1.0f}, {0.0f, 0.0f} },
+		{ { 1.0f, -1.0f}, {1.0f, 0.0f} },
+		{ { 1.0f,  1.0f}, {1.0f, 1.0f} },
+		{ {-1.0f,  1.0f}, {0.0f, 1.0f} },
 	};
 	// Vertex indices for triangles
-	vector<GLuint> ids = {
+	std::vector<GLuint> ids = {
 		0, 1, 2,	// Triangle 1
 		2, 3, 0		// Triangle 2
 	};
@@ -470,10 +469,9 @@ void initWaterMesh() {
 	for (unsigned j = 0; j < waterVtsY; j++) {
 		for (unsigned i = 0; i < waterVtsX; i++) {
 			vert v = {
-				glm::vec3((float)i / (float)(waterVtsX - 1) * 2.0f - 1.0f,
-				0.0f, (float)j / (float)(waterVtsY - 1) * 2.0f - 1.0f),
-				glm::vec2((float)i / (float)(waterVtsX - 1),
-				(float)j / (float)(waterVtsY - 1)), MAT_WATER_SURF
+				{(float)i / (float)(waterVtsX - 1) * 2.0f - 1.0f, 0.0f, (float)j / (float)(waterVtsY - 1) * 2.0f - 1.0f},
+				{(float)i / (float)(waterVtsX - 1), (float)j / (float)(waterVtsY - 1)}, 
+				MAT_WATER_SURF
 			};
 			waterVerts.push_back(v);
 			waterSurfVerts.push_back(v);
@@ -483,10 +481,9 @@ void initWaterMesh() {
 	for (unsigned j = 0; j < waterVtsY; j++) {
 		for (unsigned i = 0; i < waterVtsX; i++) {
 			vert v = {
-				glm::vec3((float)i / (float)(waterVtsX - 1) * 2.0f - 1.0f,
-				-1.0f, (float)j / (float)(waterVtsY - 1) * 2.0f - 1.0f),
-				glm::vec2((float)i / (float)(waterVtsX - 1),
-				(float)j / (float)(waterVtsY - 1)), MAT_WATER
+				{(float)i / (float)(waterVtsX - 1) * 2.0f - 1.0f, -1.0f, (float)j / (float)(waterVtsY - 1) * 2.0f - 1.0f},
+				{(float)i / (float)(waterVtsX - 1), (float)j / (float)(waterVtsY - 1)},
+				MAT_WATER
 			};
 			waterVerts.push_back(v);
 		}
@@ -624,30 +621,30 @@ void initWaterMesh() {
 
 void initWallsMesh() {
 	wallVerts = {
-		{ glm::vec3(-1.001f,  0.3f,   -1.001f), glm::vec2(0.0f, 0.0f), MAT_WALL },
-		{ glm::vec3( 1.001f,  0.3f,   -1.001f), glm::vec2(1.0f, 0.0f), MAT_WALL },
-		{ glm::vec3(-1.001f, -1.001f, -1.001f), glm::vec2(0.0f, 0.8f), MAT_WALL },
-		{ glm::vec3( 1.001f, -1.001f, -1.001f), glm::vec2(1.0f, 0.8f), MAT_WALL },
+		{ {-1.001f,  0.3f,   -1.001f}, {0.0f, 0.0f}, MAT_WALL },
+		{ { 1.001f,  0.3f,   -1.001f}, {1.0f, 0.0f}, MAT_WALL },
+		{ {-1.001f, -1.001f, -1.001f}, {0.0f, 0.8f}, MAT_WALL },
+		{ { 1.001f, -1.001f, -1.001f}, {1.0f, 0.8f}, MAT_WALL },
 
-		{ glm::vec3( 1.001f,  0.3f,   -1.001f), glm::vec2(0.0f, 0.0f), MAT_WALL },
-		{ glm::vec3( 1.001f,  0.3f,    1.001f), glm::vec2(1.0f, 0.0f), MAT_WALL },
-		{ glm::vec3( 1.001f, -1.001f, -1.001f), glm::vec2(0.0f, 0.8f), MAT_WALL },
-		{ glm::vec3( 1.001f, -1.001f,  1.001f), glm::vec2(1.0f, 0.8f), MAT_WALL },
+		{ { 1.001f,  0.3f,   -1.001f}, {0.0f, 0.0f}, MAT_WALL },
+		{ { 1.001f,  0.3f,    1.001f}, {1.0f, 0.0f}, MAT_WALL },
+		{ { 1.001f, -1.001f, -1.001f}, {0.0f, 0.8f}, MAT_WALL },
+		{ { 1.001f, -1.001f,  1.001f}, {1.0f, 0.8f}, MAT_WALL },
 
-		{ glm::vec3( 1.001f,  0.3f,    1.001f), glm::vec2(0.0f, 0.0f), MAT_WALL },
-		{ glm::vec3(-1.001f,  0.3f,    1.001f), glm::vec2(1.0f, 0.0f), MAT_WALL },
-		{ glm::vec3( 1.001f, -1.001f,  1.001f), glm::vec2(0.0f, 0.8f), MAT_WALL },
-		{ glm::vec3(-1.001f, -1.001f,  1.001f), glm::vec2(1.0f, 0.8f), MAT_WALL },
+		{ { 1.001f,  0.3f,    1.001f}, {0.0f, 0.0f}, MAT_WALL },
+		{ {-1.001f,  0.3f,    1.001f}, {1.0f, 0.0f}, MAT_WALL },
+		{ { 1.001f, -1.001f,  1.001f}, {0.0f, 0.8f}, MAT_WALL },
+		{ {-1.001f, -1.001f,  1.001f}, {1.0f, 0.8f}, MAT_WALL },
 
-		{ glm::vec3(-1.001f,  0.3f,    1.001f), glm::vec2(0.0f, 0.0f), MAT_WALL },
-		{ glm::vec3(-1.001f,  0.3f,   -1.001f), glm::vec2(1.0f, 0.0f), MAT_WALL },
-		{ glm::vec3(-1.001f, -1.001f,  1.001f), glm::vec2(0.0f, 0.8f), MAT_WALL },
-		{ glm::vec3(-1.001f, -1.001f, -1.001f), glm::vec2(1.0f, 0.8f), MAT_WALL },
+		{ {-1.001f,  0.3f,    1.001f}, {0.0f, 0.0f}, MAT_WALL },
+		{ {-1.001f,  0.3f,   -1.001f}, {1.0f, 0.0f}, MAT_WALL },
+		{ {-1.001f, -1.001f,  1.001f}, {0.0f, 0.8f}, MAT_WALL },
+		{ {-1.001f, -1.001f, -1.001f}, {1.0f, 0.8f}, MAT_WALL },
 
-		{ glm::vec3(-1.001f, -1.001f, -1.001f), glm::vec2(0.0f, 0.0f), MAT_WALL },
-		{ glm::vec3( 1.001f, -1.001f, -1.001f), glm::vec2(1.0f, 0.0f), MAT_WALL },
-		{ glm::vec3(-1.001f, -1.001f,  1.001f), glm::vec2(0.0f, 1.0f), MAT_WALL },
-		{ glm::vec3( 1.001f, -1.001f,  1.001f), glm::vec2(1.0f, 1.0f), MAT_WALL }
+		{ {-1.001f, -1.001f, -1.001f}, {0.0f, 0.0f}, MAT_WALL },
+		{ { 1.001f, -1.001f, -1.001f}, {1.0f, 0.0f}, MAT_WALL },
+		{ {-1.001f, -1.001f,  1.001f}, {0.0f, 1.0f}, MAT_WALL },
+		{ { 1.001f, -1.001f,  1.001f}, {1.0f, 1.0f}, MAT_WALL }
 	};
 	// Vertex indices for triangles
 	wallIds = {
@@ -690,35 +687,35 @@ void initWallsMesh() {
 
 void initSkybox() {
 	skyVerts = {
-		{ glm::vec3(-10.0f,  10.0f, -10.0f), glm::vec2(0.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f,  10.0f, -10.0f), glm::vec2(1.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3(-10.0f, -10.0f, -10.0f), glm::vec2(0.0f, 0.8f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f, -10.0f, -10.0f), glm::vec2(1.0f, 0.8f), MAT_SKYBOX },
+		{ {-10.0f,  10.0f, -10.0f}, {0.0f, 0.0f}, MAT_SKYBOX },
+		{ { 10.0f,  10.0f, -10.0f}, {1.0f, 0.0f}, MAT_SKYBOX },
+		{ {-10.0f, -10.0f, -10.0f}, {0.0f, 0.8f}, MAT_SKYBOX },
+		{ { 10.0f, -10.0f, -10.0f}, {1.0f, 0.8f}, MAT_SKYBOX },
 
-		{ glm::vec3( 10.0f,  10.0f, -10.0f), glm::vec2(0.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f,  10.0f,  10.0f), glm::vec2(1.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f, -10.0f, -10.0f), glm::vec2(0.0f, 0.8f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f, -10.0f,  10.0f), glm::vec2(1.0f, 0.8f), MAT_SKYBOX },
+		{ { 10.0f,  10.0f, -10.0f}, {0.0f, 0.0f}, MAT_SKYBOX },
+		{ { 10.0f,  10.0f,  10.0f}, {1.0f, 0.0f}, MAT_SKYBOX },
+		{ { 10.0f, -10.0f, -10.0f}, {0.0f, 0.8f}, MAT_SKYBOX },
+		{ { 10.0f, -10.0f,  10.0f}, {1.0f, 0.8f}, MAT_SKYBOX },
 
-		{ glm::vec3( 10.0f,  10.0f,  10.0f), glm::vec2(0.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3(-10.0f,  10.0f,  10.0f), glm::vec2(1.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f, -10.0f,  10.0f), glm::vec2(0.0f, 0.8f), MAT_SKYBOX },
-		{ glm::vec3(-10.0f, -10.0f,  10.0f), glm::vec2(1.0f, 0.8f), MAT_SKYBOX },
+		{ { 10.0f,  10.0f,  10.0f}, {0.0f, 0.0f}, MAT_SKYBOX },
+		{ {-10.0f,  10.0f,  10.0f}, {1.0f, 0.0f}, MAT_SKYBOX },
+		{ { 10.0f, -10.0f,  10.0f}, {0.0f, 0.8f}, MAT_SKYBOX },
+		{ {-10.0f, -10.0f,  10.0f}, {1.0f, 0.8f}, MAT_SKYBOX },
 
-		{ glm::vec3(-10.0f,  10.0f,  10.0f), glm::vec2(0.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3(-10.0f,  10.0f, -10.0f), glm::vec2(1.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3(-10.0f, -10.0f,  10.0f), glm::vec2(0.0f, 0.8f), MAT_SKYBOX },
-		{ glm::vec3(-10.0f, -10.0f, -10.0f), glm::vec2(1.0f, 0.8f), MAT_SKYBOX },
+		{ {-10.0f,  10.0f,  10.0f}, {0.0f, 0.0f}, MAT_SKYBOX },
+		{ {-10.0f,  10.0f, -10.0f}, {1.0f, 0.0f}, MAT_SKYBOX },
+		{ {-10.0f, -10.0f,  10.0f}, {0.0f, 0.8f}, MAT_SKYBOX },
+		{ {-10.0f, -10.0f, -10.0f}, {1.0f, 0.8f}, MAT_SKYBOX },
 
-		{ glm::vec3(-10.0f, -10.0f, -10.0f), glm::vec2(0.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f, -10.0f, -10.0f), glm::vec2(1.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3(-10.0f, -10.0f,  10.0f), glm::vec2(0.0f, 1.0f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f, -10.0f,  10.0f), glm::vec2(1.0f, 1.0f), MAT_SKYBOX },
+		{ {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f}, MAT_SKYBOX },
+		{ { 10.0f, -10.0f, -10.0f}, {1.0f, 0.0f}, MAT_SKYBOX },
+		{ {-10.0f, -10.0f,  10.0f}, {0.0f, 1.0f}, MAT_SKYBOX },
+		{ { 10.0f, -10.0f,  10.0f}, {1.0f, 1.0f}, MAT_SKYBOX },
 
-		{ glm::vec3(-10.0f,  10.0f, -10.0f), glm::vec2(0.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f,  10.0f, -10.0f), glm::vec2(1.0f, 0.0f), MAT_SKYBOX },
-		{ glm::vec3(-10.0f,  10.0f,  10.0f), glm::vec2(0.0f, 1.0f), MAT_SKYBOX },
-		{ glm::vec3( 10.0f,  10.0f,  10.0f), glm::vec2(1.0f, 1.0f), MAT_SKYBOX }
+		{ {-10.0f,  10.0f, -10.0f}, {0.0f, 0.0f}, MAT_SKYBOX },
+		{ { 10.0f,  10.0f, -10.0f}, {1.0f, 0.0f}, MAT_SKYBOX },
+		{ {-10.0f,  10.0f,  10.0f}, {0.0f, 1.0f}, MAT_SKYBOX },
+		{ { 10.0f,  10.0f,  10.0f}, {1.0f, 1.0f}, MAT_SKYBOX }
 	};
 	// Vertex indices for triangles
 	skyIds = {
@@ -764,10 +761,9 @@ void initTerrain() {
 	for (unsigned j = 0; j < terrVtsY; j++) {
 		for (unsigned i = 0; i < terrVtsX; i++) {
 			vert v = {
-				glm::vec3((float)i / (float)(terrVtsX - 1) * 2.0f - 1.0f,
-				-0.5f, (float)j / (float)(terrVtsY - 1) * 2.0f - 1.0f),
-				glm::vec2((float)i / (float)(terrVtsX - 1),
-				(float)j / (float)(terrVtsY - 1)), MAT_TERR
+				{(float)i / (float)(terrVtsX - 1) * 2.0f - 1.0f, -0.5f, (float)j / (float)(terrVtsY - 1) * 2.0f - 1.0f},
+				{(float)i / (float)(terrVtsX - 1), (float)j / (float)(terrVtsY - 1)},
+				MAT_TERR
 			};
 			terrVerts.push_back(v);
 		}
@@ -818,12 +814,12 @@ void initTerrain() {
 
 void initTextures() {
 	// Create texture data
-	initTexData = vector<glm::u8vec3>(texWidth * texHeight, glm::u8vec3(0, 0, 0));
-	islandsTexData = vector<glm::u8vec3>(texWidth * texHeight, glm::u8vec3(255, 255, 255));
-	refractionTexData = vector<glm::u8vec3>(texWidth * texHeight, glm::u8vec3(0, 0, 0));
-	reflectionTexData = vector<glm::u8vec3>(texWidth * texHeight, glm::u8vec3(0, 0, 0));
-	envMapData = vector<glm::u8vec4>(texWidth * texHeight, glm::u8vec4(0, 0, 0, 0));
-	causticsMapData = vector<glm::u8vec4>(texWidth * texHeight, glm::u8vec4(0, 0, 0, 0));
+	initTexData = std::vector<glm::u8vec3>(texWidth * texHeight, glm::u8vec3(0, 0, 0));
+	islandsTexData = std::vector<glm::u8vec3>(texWidth * texHeight, glm::u8vec3(255, 255, 255));
+	refractionTexData = std::vector<glm::u8vec3>(texWidth * texHeight, glm::u8vec3(0, 0, 0));
+	reflectionTexData = std::vector<glm::u8vec3>(texWidth * texHeight, glm::u8vec3(0, 0, 0));
+	envMapData = std::vector<glm::u8vec4>(texWidth * texHeight, glm::u8vec4(0, 0, 0, 0));
+	causticsMapData = std::vector<glm::u8vec4>(texWidth * texHeight, glm::u8vec4(0, 0, 0, 0));
 
 	// Create texture objects
 	glGenTextures(1, &prevTexture);
@@ -872,7 +868,7 @@ void initTextures() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	vector<std::string> faces{
+	std::vector<std::string> faces{
 		"textures/skyboxRight.png",  "textures/skyboxLeft.png",  "textures/skyboxTop.png",
 		"textures/skyboxBottom.png", "textures/skyboxFront.png", "textures/skyboxBack.png"
 	};
@@ -960,7 +956,7 @@ void display() {
 		// Pass 1.1: Environment Mapping =============================
 
 		// Load model on demand
-		if (!mesh) mesh = new Mesh("models/bunny.obj");
+		if (!mesh) mesh = std::make_unique<Mesh>("models/bunny.obj");
 
 		glDisable(GL_BLEND);
 		glUseProgram(envShader);
@@ -998,7 +994,7 @@ void display() {
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, causticsMap, 0);
 
-		glm::vec3 lightDir = glm::normalize(glm::vec3(0.0f) - lightPos);
+		glm::vec3 lightDir = -glm::normalize(lightPos);
 		glUniform3fv(uniLightDir, 1, value_ptr(lightDir));
 
 		// Send transformation matrix to shader
@@ -1150,8 +1146,8 @@ void display() {
 		// Display the back buffer
 		glutSwapBuffers();
 
-	} catch (const exception& e) {
-		cerr << "Fatal error: " << e.what() << endl;
+	} catch (const std::exception& e) {
+		std::cerr << "Fatal error: " << e.what() << std::endl;
 		glutLeaveMainLoop();
 	}
 }
@@ -1338,7 +1334,7 @@ void cleanup() {
 
 	if (wallTexData) { stbi_image_free(wallTexData); wallTexData = NULL; }
 
-	if (mesh) { delete mesh; mesh = NULL; }
+	if (mesh) { mesh = NULL; }
 }
 
 void generateIslands() {
@@ -1369,7 +1365,7 @@ void generateIslands() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-GLuint loadSkybox(vector<std::string> faces) {
+GLuint loadSkybox(std::vector<std::string> faces) {
 	GLuint textureID;
 	glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);

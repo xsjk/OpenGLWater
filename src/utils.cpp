@@ -4,20 +4,19 @@
 #include "util.hpp"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-using namespace std;
 
-GLuint compileShader(GLenum type, string filename, string prepend) {
+GLuint compileShader(GLenum type, std::string filename, std::string prepend) {
 	// Read the file
-	ifstream file(filename);
+	std::ifstream file(filename);
 	if (!file.is_open()) {
-		stringstream ss;
-		ss << "Could not open " << filename << "!" << endl;
-		throw runtime_error(ss.str());
+		std::stringstream ss;
+		ss << "Could not open " << filename << "!" << std::endl;;
+		throw std::runtime_error(ss.str());
 	}
-	stringstream buffer;
-	buffer << prepend << endl;
+	std::stringstream buffer;
+	buffer << prepend << std::endl;;
 	buffer << file.rdbuf();
-	string bufStr = buffer.str();
+	std::string bufStr = buffer.str();
 	const char* bufCStr = bufStr.c_str();
 	auto length = GLint(bufStr.length());
 
@@ -33,28 +32,28 @@ GLuint compileShader(GLenum type, string filename, string prepend) {
 		// Compilation failed, get the info log
 		GLint logLength;
 		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
-		vector<GLchar> logText(logLength);
+		std::vector<GLchar> logText(logLength);
 		glGetShaderInfoLog(shader, logLength, NULL, logText.data());
 
 		// Construct an error message with the compile log
-		stringstream ss;
-		string typeStr = "";
+		std::stringstream ss;
+		std::string typeStr = "";
 		switch (type) {
 		case GL_VERTEX_SHADER:
 			typeStr = "vertex"; break;
 		case GL_FRAGMENT_SHADER:
 			typeStr = "fragment"; break;
 		}
-		ss << "Error compiling " + typeStr + " shader!" << endl << endl << logText.data() << endl;
+		ss << "Error compiling " + typeStr + " shader!" << std::endl << std::endl << logText.data() << std::endl;
 
 		// Cleanup shader and throw an exception
 		glDeleteShader(shader);
-		throw runtime_error(ss.str());
+		throw std::runtime_error(ss.str());
 	}
 
 	return shader;
 }
-GLuint linkProgram(vector<GLuint> shaders) {
+GLuint linkProgram(std::vector<GLuint> shaders) {
 	GLuint program = glCreateProgram();
 
 	// Attach the shaders and link the program
@@ -73,16 +72,16 @@ GLuint linkProgram(vector<GLuint> shaders) {
 		// Link failed, get the info log
 		GLint logLength;
 		glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
-		vector<GLchar> logText(logLength);
+		std::vector<GLchar> logText(logLength);
 		glGetProgramInfoLog(program, logLength, NULL, logText.data());
 
 		// Construct an error message with the compile log
-		stringstream ss;
-		ss << "Error linking program!" << endl << endl << logText.data() << endl;
+		std::stringstream ss;
+		ss << "Error linking program!" << std::endl << std::endl << logText.data() << std::endl;
 
 		// Cleanup program and throw an exception
 		glDeleteProgram(program);
-		throw runtime_error(ss.str());
+		throw std::runtime_error(ss.str());
 	}
 
 	return program;
